@@ -1,0 +1,20 @@
+EXPLAIN ANALYZE
+WITH ClientePadrao AS (
+    SELECT 
+        cl.CliId,
+        cl.Nome,
+        COUNT(c.DataPedido) as total_corridas,
+        COUNT(DISTINCT EXTRACT(DOW FROM c.DataPedido)) as dias_semana_distintos,
+        COUNT(DISTINCT t.Marca) as marcas_distintas,
+        STRING_AGG(DISTINCT z.Zona, ', ') as zonas_utilizadas
+    FROM Cliente cl
+    JOIN Corrida c ON cl.CliId = c.CliId
+    JOIN Taxi t ON c.Placa = t.Placa
+    JOIN Motorista m ON t.Placa = m.Placa
+    JOIN Fila f ON m.CNH = f.CNH
+    JOIN Zona z ON f.Zona = z.Zona
+    GROUP BY cl.CliId, cl.Nome
+)
+SELECT * FROM ClientePadrao 
+WHERE total_corridas > 5
+ORDER BY total_corridas DESC;

@@ -1,0 +1,19 @@
+EXPLAIN ANALYZE
+WITH HorasTrabalhadas AS (
+    SELECT 
+        m.CNH,
+        m.Nome,
+        COUNT(DISTINCT f.Zona) as num_zonas,
+        SUM(EXTRACT(EPOCH FROM (f.DataHoraOut - f.DataHoraIn))/3600) as total_horas,
+        AVG(f.KmIn) as media_km,
+        COUNT(c.CliId) as total_corridas
+    FROM Motorista m
+    LEFT JOIN Fila f ON m.CNH = f.CNH
+    LEFT JOIN Taxi t ON m.Placa = t.Placa
+    LEFT JOIN Corrida c ON t.Placa = c.Placa
+    GROUP BY m.CNH, m.Nome
+    HAVING COUNT(c.CliId) > 0
+)
+SELECT * FROM HorasTrabalhadas 
+ORDER BY total_corridas DESC 
+LIMIT 10;

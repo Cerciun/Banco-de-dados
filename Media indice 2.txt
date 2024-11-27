@@ -1,0 +1,55 @@
+DO $$
+DECLARE
+   v_query TEXT := 'EXPLAIN ANALYZE 
+   WITH PeriodosDia AS (
+       SELECT f.Zona,
+       CASE WHEN EXTRACT(HOUR FROM f.DataHoraIn) BETWEEN 6 AND 11 THEN ''Manhã''
+            WHEN EXTRACT(HOUR FROM f.DataHoraIn) BETWEEN 12 AND 17 THEN ''Tarde''
+            WHEN EXTRACT(HOUR FROM f.DataHoraIn) BETWEEN 18 AND 23 THEN ''Noite''
+            ELSE ''Madrugada'' END as periodo,
+       COUNT(*) as quantidade_corridas,
+       AVG(EXTRACT(EPOCH FROM (f.DataHoraOut - f.DataHoraIn))/60) as tempo_medio_espera
+       FROM Fila f GROUP BY f.Zona, periodo)
+   SELECT * FROM PeriodosDia';
+   start_time timestamp;
+   total_time numeric[] := ARRAY[0,0,0,0,0];
+BEGIN
+   FOR i IN 1..100 LOOP
+       -- Hash
+       start_time := clock_timestamp();
+       SET enable_hashjoin = on;
+       EXECUTE v_query;
+       total_time[1] := total_time[1] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+
+       -- B-tree
+       start_time := clock_timestamp();
+       SET enable_hashjoin = off;
+       SET enable_mergejoin = on;
+       EXECUTE v_query;
+       total_time[2] := total_time[2] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+
+       -- BRIN
+       start_time := clock_timestamp();
+       SET enable_bitmapscan = on;
+       EXECUTE v_query;
+       total_time[3] := total_time[3] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+
+       -- Parcial
+       start_time := clock_timestamp();
+       SET enable_indexscan = on;
+       EXECUTE v_query;
+       total_time[4] := total_time[4] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+
+       -- Composto
+       start_time := clock_timestamp();
+       SET enable_indexonlyscan = on;
+       EXECUTE v_query;
+       total_time[5] := total_time[5] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+   END LOOP;
+
+   RAISE NOTICE 'Média Hash: %.3f ms', (total_time[1] / 100);
+   RAISE NOTICE 'Média B-tree: %.3f ms', (total_time[2] / 100);
+   RAISE NOTICE 'Média BRIN: %.3f ms', (total_time[3] / 100);
+   RAISE NOTICE 'Média Parcial: %.3f ms', (total_time[4] / 100);
+   RAISE NOTICE 'Média Composto: %.3f ms', (total_time[5] / 100);
+END $$;

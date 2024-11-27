@@ -1,0 +1,23 @@
+EXPLAIN ANALYZE
+WITH PeriodosDia AS (
+    SELECT 
+        f.Zona,
+        CASE 
+            WHEN EXTRACT(HOUR FROM f.DataHoraIn) BETWEEN 6 AND 11 THEN 'Manhã'
+            WHEN EXTRACT(HOUR FROM f.DataHoraIn) BETWEEN 12 AND 17 THEN 'Tarde'
+            WHEN EXTRACT(HOUR FROM f.DataHoraIn) BETWEEN 18 AND 23 THEN 'Noite'
+            ELSE 'Madrugada'
+        END as periodo,
+        COUNT(*) as quantidade_corridas,
+        AVG(EXTRACT(EPOCH FROM (f.DataHoraOut - f.DataHoraIn))/60) as tempo_medio_espera
+    FROM Fila f
+    GROUP BY f.Zona, periodo
+)
+SELECT * FROM PeriodosDia 
+ORDER BY Zona, 
+    CASE periodo 
+        WHEN 'Madrugada' THEN 1 
+        WHEN 'Manhã' THEN 2 
+        WHEN 'Tarde' THEN 3 
+        WHEN 'Noite' THEN 4 
+    END;

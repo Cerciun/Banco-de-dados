@@ -1,0 +1,51 @@
+DO $$
+DECLARE
+   v_query TEXT := 'EXPLAIN ANALYZE 
+   WITH HorasTrabalhadas AS (
+       SELECT m.CNH, m.Nome, COUNT(DISTINCT f.Zona) as num_zonas,
+       SUM(EXTRACT(EPOCH FROM (f.DataHoraOut - f.DataHoraIn))/3600) as total_horas,
+       AVG(f.KmIn) as media_km, COUNT(c.CliId) as total_corridas
+       FROM Motorista m
+       LEFT JOIN Fila f ON m.CNH = f.CNH
+       LEFT JOIN Taxi t ON m.Placa = t.Placa
+       LEFT JOIN Corrida c ON t.Placa = c.Placa
+       GROUP BY m.CNH, m.Nome HAVING COUNT(c.CliId) > 0)
+   SELECT * FROM HorasTrabalhadas ORDER BY total_corridas DESC LIMIT 10';
+   start_time timestamp;
+   total_time numeric[] := ARRAY[0,0,0,0,0];
+BEGIN
+   FOR i IN 1..100 LOOP
+       start_time := clock_timestamp();
+       SET enable_hashjoin = on;
+       SET enable_mergejoin = off;
+       EXECUTE v_query;
+       total_time[1] := total_time[1] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+
+       start_time := clock_timestamp();
+       SET enable_hashjoin = off;
+       SET enable_mergejoin = on;
+       EXECUTE v_query;
+       total_time[2] := total_time[2] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+
+       start_time := clock_timestamp();
+       SET enable_bitmapscan = on;
+       EXECUTE v_query;
+       total_time[3] := total_time[3] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+
+       start_time := clock_timestamp();
+       SET enable_indexscan = on;
+       EXECUTE v_query;
+       total_time[4] := total_time[4] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+
+       start_time := clock_timestamp();
+       SET enable_indexonlyscan = on;
+       EXECUTE v_query;
+       total_time[5] := total_time[5] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+   END LOOP;
+
+   RAISE NOTICE 'Média Hash: %.3f ms', (total_time[1] / 100);
+   RAISE NOTICE 'Média B-tree: %.3f ms', (total_time[2] / 100);
+   RAISE NOTICE 'Média BRIN: %.3f ms', (total_time[3] / 100);
+   RAISE NOTICE 'Média Parcial: %.3f ms', (total_time[4] / 100);
+   RAISE NOTICE 'Média Composto: %.3f ms', (total_time[5] / 100);
+END $$;

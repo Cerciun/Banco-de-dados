@@ -1,0 +1,21 @@
+EXPLAIN ANALYZE
+WITH EficienciaZona AS (
+    SELECT 
+        z.Zona,
+        t.Marca,
+        t.Modelo,
+        COUNT(DISTINCT f.CNH) as total_motoristas,
+        COUNT(DISTINCT c.CliId) as total_clientes,
+        AVG(EXTRACT(EPOCH FROM (f.DataHoraOut - f.DataHoraIn))/60) as tempo_medio_atendimento,
+        AVG(f.KmIn) as media_km,
+        COUNT(c.DataPedido) as total_corridas
+    FROM Zona z
+    JOIN Fila f ON z.Zona = f.Zona
+    JOIN Motorista m ON f.CNH = m.CNH
+    JOIN Taxi t ON m.Placa = t.Placa
+    LEFT JOIN Corrida c ON t.Placa = c.Placa
+    GROUP BY z.Zona, t.Marca, t.Modelo
+)
+SELECT * FROM EficienciaZona 
+WHERE total_corridas > 0
+ORDER BY Zona, total_corridas DESC;

@@ -1,0 +1,20 @@
+EXPLAIN ANALYZE
+WITH UtilizacaoTaxi AS (
+    SELECT 
+        t.Placa,
+        t.Marca,
+        t.Modelo,
+        t.AnoFab,
+        COUNT(DISTINCT c.CliId) as total_clientes,
+        COUNT(c.DataPedido) as total_corridas,
+        COUNT(DISTINCT m.CNH) as total_motoristas,
+        COALESCE(SUM(EXTRACT(EPOCH FROM (f.DataHoraOut - f.DataHoraIn))/3600), 0) as horas_operacao
+    FROM Taxi t
+    LEFT JOIN Corrida c ON t.Placa = c.Placa
+    LEFT JOIN Motorista m ON t.Placa = m.Placa
+    LEFT JOIN Fila f ON m.CNH = f.CNH
+    GROUP BY t.Placa, t.Marca, t.Modelo, t.AnoFab
+)
+SELECT * FROM UtilizacaoTaxi 
+WHERE total_corridas > 0 
+ORDER BY horas_operacao DESC;

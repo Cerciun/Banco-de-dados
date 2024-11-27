@@ -1,0 +1,52 @@
+DO $$
+DECLARE
+   v_query TEXT := 'EXPLAIN ANALYZE WITH ClientePadrao AS (
+       SELECT cl.CliId, cl.Nome, COUNT(c.DataPedido) as total_corridas,
+       COUNT(DISTINCT EXTRACT(DOW FROM c.DataPedido)) as dias_semana_distintos,
+       COUNT(DISTINCT t.Marca) as marcas_distintas,
+       STRING_AGG(DISTINCT z.Zona, '', '') as zonas_utilizadas
+       FROM Cliente cl
+       JOIN Corrida c ON cl.CliId = c.CliId
+       JOIN Taxi t ON c.Placa = t.Placa
+       JOIN Motorista m ON t.Placa = m.Placa
+       JOIN Fila f ON m.CNH = f.CNH
+       JOIN Zona z ON f.Zona = z.Zona
+       GROUP BY cl.CliId, cl.Nome)
+   SELECT * FROM ClientePadrao WHERE total_corridas > 5 ORDER BY total_corridas DESC';
+   start_time timestamp;
+   total_time numeric[] := ARRAY[0,0,0,0,0];
+BEGIN
+   FOR i IN 1..100 LOOP
+       start_time := clock_timestamp();
+       SET enable_hashjoin = on;
+       EXECUTE v_query;
+       total_time[1] := total_time[1] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+
+       start_time := clock_timestamp();
+       SET enable_hashjoin = off;
+       SET enable_mergejoin = on;
+       EXECUTE v_query;
+       total_time[2] := total_time[2] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+
+       start_time := clock_timestamp();
+       SET enable_bitmapscan = on;
+       EXECUTE v_query;
+       total_time[3] := total_time[3] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+
+       start_time := clock_timestamp();
+       SET enable_indexscan = on;
+       EXECUTE v_query;
+       total_time[4] := total_time[4] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+
+       start_time := clock_timestamp();
+       SET enable_indexonlyscan = on;
+       EXECUTE v_query;
+       total_time[5] := total_time[5] + EXTRACT(EPOCH FROM (clock_timestamp() - start_time)) * 1000;
+   END LOOP;
+
+   RAISE NOTICE 'Média Hash: %', ROUND((total_time[1] / 100)::numeric, 3);
+   RAISE NOTICE 'Média B-tree: %', ROUND((total_time[2] / 100)::numeric, 3);
+   RAISE NOTICE 'Média BRIN: %', ROUND((total_time[3] / 100)::numeric, 3);
+   RAISE NOTICE 'Média Parcial: %', ROUND((total_time[4] / 100)::numeric, 3);
+   RAISE NOTICE 'Média Composto: %', ROUND((total_time[5] / 100)::numeric, 3);
+END $$;
